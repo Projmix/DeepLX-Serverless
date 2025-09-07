@@ -143,5 +143,20 @@ function check_port(arg) {
   return 6119;
 }
 
+// Экспортируем обработчики
+export { get };
 
-export { post, get };
+// Создаем Express app только для локального запуска
+if (typeof process.env.VERCEL === 'undefined') {
+  const express = require('express');
+  const app = express();
+  app.use(express.json());
+  
+  app.post('/translate', post);
+  app.get('/', get);
+  
+  const PORT = process.env.PORT || 6119;
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
