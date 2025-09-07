@@ -3,7 +3,6 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
-import { brotliCompress, brotliDecompress } from 'zlib';
 import { translate } from './translate.js';
 import 'dotenv/config';
 
@@ -32,24 +31,26 @@ const argv = yargs(hideBin(process.argv))
 
 // 定义配置
 const PORT = argv.port,
-  returnAlternative = argv.alt,
-  CORS = {
-    origin: argv.cors,
-    methods: 'GET,POST,OPTIONS',
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
-  };
+  returnAlternative = argv.alt;
+
+// CORS конфигурация
+const corsOptions = {
+  origin: argv.cors,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
 
 // Создаем Express app
 const app = express();
 
-// Добавляем CORS middleware
-app.use(cors(CORS));
+// Добавляем CORS middleware для всех маршрутов
+app.use(cors(corsOptions));
 
-// Обработка preflight запросов
-app.options('*', cors(CORS));
+// Обработка preflight OPTIONS запросов для всех путей
+app.options(/.*/, cors(corsOptions));
 
-// Middleware для всех запросов
+// Middleware для добавления CORS заголовков вручную (дополнительная страховка)
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
