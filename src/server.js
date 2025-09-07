@@ -143,9 +143,5 @@ function check_port(arg) {
   return 6119;
 }
 
-// 启动本地服务器
-app.listen(PORT, () => {
-  console.log(`Server is running and listening on http://localhost:${PORT}/translate`);
-});
 
 export { post, get };
