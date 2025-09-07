@@ -1,11 +1,25 @@
+// /api/translate.js
 import express from 'express';
 import { translate } from '../src/translate.js';
 
 const app = express();
 app.use(express.json());
 
-// POST /translate - основной эндпоинт перевода
-app.post('/translate', async (req, res) => {
+// --- CORS Middleware ---
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
+// --- Маршруты ---
+
+// POST /api/translate - основной эндпоинт перевода
+app.post('/api/translate', async (req, res) => {
   try {
     const { text, source_lang, target_lang } = req.body;
     
@@ -25,11 +39,11 @@ app.post('/translate', async (req, res) => {
       method: "Free",
       source_lang: result.source_lang,
       target_lang: result.target_lang,
-      alternatives: result.alternatives
+      alternatives: result.alternatives || []
     });
 
   } catch (error) {
-    console.error('[ERROR] API:', error);
+    console.error('[ERROR] API /api/translate:', error);
     res.status(500).json({
       code: 500,
       message: error.message || 'Internal server error'
@@ -37,11 +51,20 @@ app.post('/translate', async (req, res) => {
   }
 });
 
-// GET / - приветственное сообщение
-app.get('/', (req, res) => {
+// GET /api/test - тестовый эндпоинт
+app.get('/api/test', (req, res) => {
   res.status(200).json({
     code: 200,
-    message: "Welcome to the DeepL Free API. Please POST to '/translate'. Visit 'https://github.com/guobao2333/DeepLX-Serverless' for more information."
+    message: "API is working correctly!",
+    data: "DeepLX Serverless API Test"
+  });
+});
+
+// GET /api - приветственное сообщение
+app.get('/api', (req, res) => {
+  res.status(200).json({
+    code: 200,
+    message: "Welcome to the DeepL Free API. Please POST to '/api/translate'. Visit 'https://github.com/guobao2333/DeepLX-Serverless' for more information."
   });
 });
 
