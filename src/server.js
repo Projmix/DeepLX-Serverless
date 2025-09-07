@@ -25,7 +25,7 @@ const argv = yargs(hideBin(process.argv))
     alias: 'c',
     describe: 'Origin that allow cross-domain access',
     coerce: check_cors,
-    default: process.env.CORS_ORIGIN || false
+    default: process.env.CORS_ORIGIN || '*'
   })
   .help().alias('help', 'h')
   .argv;
@@ -35,14 +35,28 @@ const PORT = argv.port,
   returnAlternative = argv.alt,
   CORS = {
     origin: argv.cors,
-    methods: 'GET,POST',
+    methods: 'GET,POST,OPTIONS',
     allowedHeaders: ['Content-Type', 'Authorization'],
-    preflightContinue: false
+    credentials: true
   };
 
 // Создаем Express app
 const app = express();
+
+// Добавляем CORS middleware
 app.use(cors(CORS));
+
+// Обработка preflight запросов
+app.options('*', cors(CORS));
+
+// Middleware для всех запросов
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  next();
+});
+
 app.use(bodyParser.json());
 
 // POST /translate - основной эндпоинт перевода
@@ -120,13 +134,93 @@ app.get('/', (req, res) => {
   });
 });
 
+// GET /test - тестовый эндпоинт для проверки работоспособности
+app.get('/test', async (req, res) => {
+  try {
+    const testText = "Hello world! This is a test translation.";
+    const sourceLang = "EN";
+    const targetLang = "ZH";
+    
+    console.log(`[TEST] ${new Date().toISOString()} | GET "/test" | Starting test translation`);
+    
+    const result = await translate(testText, sourceLang, targetLang);
+    
+    if (result && result.data) {
+      res.status(200).json({
+        code: 200,
+        message: "Test translation successful!",
+        input: testText,
+        output: result.data,
+        source_lang: sourceLang,
+        target_lang: targetLang,
+        test_passed: true
+      });
+      console.log(`[TEST] ${new Date().toISOString()} | GET "/test" | 200 | Test passed`);
+    } else {
+      res.status(500).json({
+        code: 500,
+        message: "Test translation failed",
+        test_passed: false
+      });
+      console.log(`[TEST] ${new Date().toISOString()} | GET "/test" | 500 | Test failed`);
+    }
+  } catch (error) {
+    console.error(`[TEST ERROR] ${new Date().toISOString()} | GET "/test" | ${error.message}`);
+    res.status(500).json({
+      code: 500,
+      message: error.message || "Test failed",
+      test_passed: false
+    });
+  }
+});
+
+// POST /test - тестовый эндпоинт POST для проверки работоспособности
+app.post('/test', async (req, res) => {
+  try {
+    const testText = "This is a POST test translation from English to Russian.";
+    const sourceLang = "EN";
+    const targetLang = "RU";
+    
+    console.log(`[TEST] ${new Date().toISOString()} | POST "/test" | Starting test translation`);
+    
+    const result = await translate(testText, sourceLang, targetLang);
+    
+    if (result && result.data) {
+      res.status(200).json({
+        code: 200,
+        message: "POST Test translation successful!",
+        input: testText,
+        output: result.data,
+        source_lang: sourceLang,
+        target_lang: targetLang,
+        test_passed: true
+      });
+      console.log(`[TEST] ${new Date().toISOString()} | POST "/test" | 200 | Test passed`);
+    } else {
+      res.status(500).json({
+        code: 500,
+        message: "POST Test translation failed",
+        test_passed: false
+      });
+      console.log(`[TEST] ${new Date().toISOString()} | POST "/test" | 500 | Test failed`);
+    }
+  } catch (error) {
+    console.error(`[TEST ERROR] ${new Date().toISOString()} | POST "/test" | ${error.message}`);
+    res.status(500).json({
+      code: 500,
+      message: error.message || "POST Test failed",
+      test_passed: false
+    });
+  }
+});
+
 // Функции проверки параметров
 function check_cors(arg) {
-  if (arg === undefined) return false;
+  if (arg === undefined) return '*';
   if (typeof arg === 'string' || typeof arg === 'boolean') return arg;
 
   console.error("ParamTypeError: '" + arg + "', origin should be Boolean or String.\neg: '*' or true or RegExp");
-  return false;
+  return '*';
 }
 
 function check_port(arg) {
@@ -143,5 +237,6 @@ export default app;
 if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
+    console.log(`Test endpoint: http://localhost:${PORT}/test`);
   });
 }
