@@ -5,7 +5,7 @@ import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import { brotliCompress, brotliDecompress } from 'zlib';
 import { translate } from './translate.js';
-import'dotenv/config';
+import 'dotenv/config';
 
 // 解析参数
 const argv = yargs(hideBin(process.argv))
@@ -31,8 +31,7 @@ const argv = yargs(hideBin(process.argv))
   .argv;
 
 // 定义配置
-const app = express(),
-  PORT = argv.port,
+const PORT = argv.port,
   returnAlternative = argv.alt,
   CORS = {
     origin: argv.cors,
@@ -41,121 +40,107 @@ const app = express(),
     preflightContinue: false
   };
 
+// Создаем Express app
+const app = express();
 app.use(cors(CORS));
 app.use(bodyParser.json());
 
-app.post('/translate', async (req, res) => await post(req, res));
-app.get('/', async (req, res) => await get(req, res));
-
-async function post(req, res) {
+// POST /translate - основной эндпоинт перевода
+app.post('/translate', async (req, res) => {
   const startTime = Date.now();
 
   let { text, source_lang, target_lang, alt_count } = req.body;
-  source_lang = source_lang.toUpperCase();
-  target_lang = target_lang.toUpperCase();
-
-  // 检查请求体
-  if (!req.body || !text || !target_lang || alt_count !== undefined && typeof alt_count !== 'number' || alt_count > 3 || alt_count < 0) {
+  
+  // Проверка параметров
+  if (!text) {
     const duration = Date.now() - startTime;
     console.log(`[WARN] ${new Date().toISOString()} | POST "translate" | 400 | Bad Request | ${duration}ms`);
     return res.status(400).json({
       code: 400,
-      message: "Bad Request"
+      message: "Text is required"
     });
   }
 
+  // Установка значений по умолчанию
+  source_lang = source_lang ? source_lang.toUpperCase() : 'AUTO';
+  target_lang = target_lang ? target_lang.toUpperCase() : 'EN';
+
   try {
     const result = await translate(text, source_lang, target_lang, alt_count);
-    // const result = await translate(text, source_lang, target_lang);
-    /*result = brotliDecompress(result, (err, decompressedData) => {
-    if (err) console.error(err);
-    return decompressedData;
-  });*/
-
+    
     let duration = Date.now() - startTime;
-    if(result.code === 429) {
+    
+    // Обработка ошибок
+    if (result.code === 429) {
       console.error(`[WARN] ${new Date().toISOString()} | POST "translate" | 429 | ${result.message} | ${duration}ms`);
-      res.status(429).json({
+      return res.status(429).json({
         code: 429,
         message: result.message
       });
     }
     
-    duration = Date.now() - startTime;
-    // console.log(result);
-    if(result == "" || result.data == "") {
-      console.error(`[ERROR] ${new Date().toISOString()} | POST "translate" | 500 | ${result.message} | ${duration}ms`);
-      res.status(500).json({
+    if (!result || !result.data) {
+      console.error(`[ERROR] ${new Date().toISOString()} | POST "translate" | 500 | Translation failed | ${duration}ms`);
+      return res.status(500).json({
         code: 500,
-        message: "Translation failed",
-        error: result.statusText
+        message: "Translation failed"
       });
     }
+    
     console.log(`[LOG] ${new Date().toISOString()} | POST "translate" | 200 | ${duration}ms`);
 
     const responseData = {
-      code: result.code,
+      code: result.code || 200,
       id: result.id,
       data: result.data,
       method: "Free",
-      source_lang: result.source_lang,
-      target_lang,
-      alternatives: (returnAlternative ? result.alternatives : "[]")
+      source_lang: result.source_lang || source_lang,
+      target_lang: target_lang,
+      alternatives: (returnAlternative ? result.alternatives : [])
     };
-
-    /*brotliCompress(responseData, (err, compressedData) => {
-      if (err) {
-        console.error('压缩错误: '+err);
-        res.json(responseData);
-      } else res.json(compressedData);
-    });*/
 
     res.json(responseData);
 
   } catch (err) {
-    console.error(err, err.stack);
+    const duration = Date.now() - startTime;
+    console.error(`[ERROR] ${new Date().toISOString()} | POST "translate" | 500 | ${err.message} | ${duration}ms`);
+    console.error(err.stack);
     res.status(500).json({
       code: 500,
-      message: err.message
+      message: err.message || "Internal server error"
     });
   }
-};
+});
 
-async function get(req, res) {
+// GET / - приветственное сообщение
+app.get('/', (req, res) => {
   res.status(200).json({
     code: 200,
     message: "Welcome to the DeepL Free API. Please POST to '/translate'. Visit 'https://github.com/guobao2333/DeepLX-Serverless' for more information."
   });
-};
+});
 
+// Функции проверки параметров
 function check_cors(arg) {
-  if (arg === undefined) return;
+  if (arg === undefined) return false;
   if (typeof arg === 'string' || typeof arg === 'boolean') return arg;
 
-  console.error("ParamTypeError: \x1b[33m'"+arg+"'\x1b[31m, origin should be Boolean or String.\n\x1b[0meg: \x1b[32m'*' or true or RegExp");
-  process.exit(1);
+  console.error("ParamTypeError: '" + arg + "', origin should be Boolean or String.\neg: '*' or true or RegExp");
+  return false;
 }
 
 function check_port(arg) {
   if (typeof arg === 'number' && !isNaN(arg) && Number.isInteger(arg) && arg >= 0 && arg <= 65535) return arg;
 
-  console.warn('WARNING:\x1b[0m port should be >= 0 and < 65536.\nUsed default value instead: 6119\n');
+  console.warn('WARNING: port should be >= 0 and < 65536.\nUsed default value instead: 6119\n');
   return 6119;
 }
 
-// Экспортируем обработчики
-export { get };
+// Экспорт Express приложения для Vercel
+export default app;
 
-// Создаем Express app только для локального запуска
-if (typeof process.env.VERCEL === 'undefined') {
-  const express = require('express');
-  const app = express();
-  app.use(express.json());
-  
-  app.post('/translate', post);
-  app.get('/', get);
-  
-  const PORT = process.env.PORT || 6119;
+// Запуск сервера локально (только если не на Vercel)
+if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
